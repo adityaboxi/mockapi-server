@@ -1,0 +1,31 @@
+const { redisClient } = require('../config/redis');
+
+const TTL = 7 * 24 * 3600; // 7 days
+
+function getDefinitionKey(projectId, version, method, urlpath) {
+  return `mockapi:def:${projectId}:${version}:${method.toUpperCase()}:${urlpath}`;
+}
+
+async function storeMockDefinition(projectId, version, method, urlpath, definition) {
+  const key = getDefinitionKey(projectId, version, method, urlpath);
+  try {
+    await redisClient.setEx(key, TTL, JSON.stringify(definition));
+    console.log(`[Redis] Stored : ${key}`);
+  } catch (err) {
+    console.error(`[Redis] Failed to store ${key}:`, err.message);
+    throw err;
+  }
+}
+
+async function deleteMockDefinition(projectId, version, method, urlpath) {
+  const key = getDefinitionKey(projectId, version, method, urlpath);
+  try {
+    await redisClient.del(key);
+    console.log(`[Redis] Deleted: ${key}`);
+  } catch (err) {
+    console.error(`[Redis] Failed to delete ${key}:`, err.message);
+    throw err;
+  }
+}
+
+module.exports = { storeMockDefinition, deleteMockDefinition, getDefinitionKey };
