@@ -41,7 +41,7 @@ const startServer = async () => {
     redisConnected = true;
     console.log('✅ Redis connecte');
   } catch (err) {
-    console.error('❌ Redis connection failed:', err.message);
+    console.error('❌ Redis connectioon failed:', err.message);
     process.exit(1);
   }
 
