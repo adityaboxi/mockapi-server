@@ -216,7 +216,7 @@ const { ask_ai } = require('./controllers/ask_ai');
   // ============ START SERVER ============
   const PORT = process.env.PORT;
   server.listen(PORT, () => {
-    console.log(`🚀 Server running on porttttttttttttttttttttttttttttttttttttttttttttttttttt ${PORT}`);
+    console.log(`🚀 Server running${PORT}`);
   });
 };
 
