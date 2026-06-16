@@ -1,13 +1,12 @@
-// Located in: src/queues/emailQueue.js
-
 const { Queue, Worker } = require('bullmq');
 const { sendOTPEmail } = require('../services/emailService');
 
-// No fallback – REDIS_URL must be defined in .env
+// BullMQ connection options – must include TLS for Upstash
 const redisConnectionOptions = {
   connection: {
     url: process.env.REDIS_URL,
-    maxRetriesPerRequest: null
+    maxRetriesPerRequest: null,
+    tls: {}   // 👈 Force TLS – required for Upstash
   }
 };
 

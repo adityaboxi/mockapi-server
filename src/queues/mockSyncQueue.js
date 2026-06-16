@@ -5,6 +5,7 @@ const redisConnection = {
     url: process.env.REDIS_URL,
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
+    tls: {}   // 👈 Force TLS – required for Upstash
   },
 };
 

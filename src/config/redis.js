@@ -2,17 +2,19 @@ const redis = require('redis');
 
 // Check if REDIS_URL is defined
 if (!process.env.REDIS_URL) {
-
+    console.error('❌ REDIS_URL is not defined in environment variables');
     process.exit(1);
 }
 
 const redisClient = redis.createClient({
     url: process.env.REDIS_URL,
     socket: {
+        tls: true,                     // 👈 Force TLS for Upstash
+        rejectUnauthorized: false,     // 👈 Required for some Node.js versions with Upstash
         reconnectStrategy: (retries) => {
             // Exponential backoff: 2^retries * 100ms, max 10s
             const delay = Math.min(Math.pow(2, retries) * 100, 10000);
-            
+            console.log(`🔄 Redis reconnecting in ${delay}ms...`);
             return delay;
         }
     }
