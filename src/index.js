@@ -124,6 +124,7 @@ const { ask_ai } = require('./controllers/ask_ai');
   app.post('/api/reverse-ai', authenticateToken, reverse_ai);
   app.post('/api/logs', authenticateToken, logs);
 
+  app.get('/',(req,res)=>console.log("hi hello serveer here😘"));
   // ============ SOCKET.IO ============
   let heartbeatInterval;
   let dataPollingInterval;
