@@ -1,6 +1,6 @@
 const { redisClient } = require('../config/redis');
 
-const TTL = process.env.TTL;
+const TTL = parseInt(process.env.TTL, 10) ; 
 
 function getDefinitionKey(projectId, version, method, urlpath) {
   return `mockapi:def:${projectId}:${version}:${method.toUpperCase()}:${urlpath}`;
