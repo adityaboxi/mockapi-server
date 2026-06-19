@@ -39,7 +39,7 @@ const startServer = async () => {
   try {
     await connectRedis();
     redisConnected = true;
-    console.log('✅ Redis connecte');
+    console.log('✅ Redis connected');
   } catch (err) {
     console.error('❌ Redis coonnectioon failed:', err.message);
     process.exit(1);

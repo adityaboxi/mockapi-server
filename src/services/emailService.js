@@ -73,8 +73,7 @@ async function sendOTPEmail(email, otp, username) {
       errorMessage = error.response.body.errors.map(e => e.message).join(' | ');
     }
     
-    console.error('❌ SendGrid Service Error:', errorMessage);
-    
+   
     return { 
       success: false, 
       error: errorMessage
