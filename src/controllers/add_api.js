@@ -5,6 +5,10 @@ const { storeMockDefinition } = require('../utils/redisMock');
 const { addMockSyncJob } = require('../queues/mockSyncQueue');
 
 function buildActualFullUrl(protocol, host, projectId, version, urlPath, pathParams, queryParams) {
+  if (!host) {
+    console.warn('[buildActualFullUrl] Host is missing – using localhost fallback');
+    host = 'localhost:4000';
+  }
   let resolvedPath = urlPath || '';
   pathParams.forEach(param => {
     const placeholder = `:${param.key}`;
@@ -34,6 +38,10 @@ async function add_api(req, res) {
     console.error('[add-api] Missing required fields');
     return res.status(400).json({ error: 'Missing required fields: project_id, urlpath, apihistorydata' });
   }
+
+  // 🔥 Coerce airesponse to a boolean (in case it arrives as string "true"/"false")
+  const aiResponseBool = airesponse === true || airesponse === 'true';
+  console.log(`[add-api] airesponse received: ${airesponse} → coerced to: ${aiResponseBool}`);
 
   // 🔍 LOG the full apihistorydata object to see what the frontend sent
   console.log('[add-api] apihistorydata received:', JSON.stringify(apihistorydata, null, 2));
@@ -66,7 +74,7 @@ async function add_api(req, res) {
       return res.status(409).json({ error: 'URL path already exists. Use /update-api to add a new version.' });
     }
 
-    // Destructure all fields, including new ones
+    // Destructure all fields
     const {
       protocol,
       method,
@@ -75,26 +83,27 @@ async function add_api(req, res) {
       requestBody = null,
       responseBody = null,
       isAuthEnabled = false,
-      authScheme,
+      authScheme = 'BearerAuth',    // 👈 Add default here to avoid undefined
       latency = 0,
       rateLimit = 0,
       headers = [],
       responseHeaders = [],
       cookies = [],
       statusCode = 200,
-      expectedToken = '',      // ✨ new
-      expectedApiKey = '',     // ✨ new
+      expectedToken = '',
+      expectedApiKey = '',
     } = apihistorydata;
 
-    // 🔍 LOG the destructured values (especially expectedToken, expectedApiKey, cookies)
+    // 🔍 LOG the destructured values (including the coerced airesponse)
     console.log('[add-api] Destructured fields:', {
       protocol, method, pathParams, queryParams,
       isAuthEnabled, authScheme, latency, rateLimit, statusCode,
       headers, responseHeaders, cookies,
-      expectedToken, expectedApiKey
+      expectedToken, expectedApiKey,
+      airesponse: aiResponseBool   // 👈 Log the coerced value
     });
 
-    const host = process.env.HOST;
+    const host = process.env.HOST || 'localhost:4000';
     const version = 'v1';
     const actualFullUrl = buildActualFullUrl(
       protocol, host, project._id.toString(), version, urlpath, pathParams, queryParams
@@ -110,7 +119,7 @@ async function add_api(req, res) {
       responseBody,
       version,
       actualFullUrl,
-      airesponse: airesponse || false,
+      airesponse: aiResponseBool,   // ✅ store the coerced boolean
       isAuthEnabled,
       authScheme,
       latency,
@@ -125,7 +134,7 @@ async function add_api(req, res) {
       updatedAt: new Date()
     };
 
-    // 🔍 LOG the final object being stored in the database and sent to mock server
+    // 🔍 LOG the final object being stored
     console.log('[add-api] newVersionObj (will be saved and synced):', JSON.stringify(newVersionObj, null, 2));
 
     const newEndpoint = {

@@ -4,10 +4,19 @@ const SystemEventLog = require('../models/SystemEventLog');
 const { storeMockDefinition } = require('../utils/redisMock');
 const { addMockSyncJob } = require('../queues/mockSyncQueue');
 
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function buildActualFullUrl(protocol, host, projectId, version, urlPath, pathParams, queryParams) {
+  if (!host) {
+    console.warn('[buildActualFullUrl] Host is missing – using localhost fallback');
+    host = 'localhost:4000';
+  }
   let resolvedPath = urlPath || '';
   pathParams.forEach(({ key, value }) => {
-    resolvedPath = resolvedPath.replace(new RegExp(`:${key}`, 'g'), value || `{${key}}`);
+    const escapedKey = escapeRegExp(key);
+    resolvedPath = resolvedPath.replace(new RegExp(`:${escapedKey}`, 'g'), value || `{${key}}`);
   });
   if (resolvedPath.startsWith('/')) resolvedPath = resolvedPath.slice(1);
   let fullUrl = `${protocol}://${host}/${projectId}/${version}/${resolvedPath}`;
@@ -25,15 +34,16 @@ async function update_api(req, res) {
   const { project_id, urlpath, apihistorydata, airesponse } = req.body;
   const username = req.user?.username;
 
-  // 🔍 LOG the received request body
   console.log('[update-api] Request body:', JSON.stringify(req.body, null, 2));
 
   if (!project_id || !urlpath || !apihistorydata) {
     return res.status(400).json({ error: 'Missing required fields: project_id, urlpath, apihistorydata' });
   }
 
-  // 🔍 LOG the full apihistorydata object
-  console.log('[update-api] apihistorydata received:', JSON.stringify(apihistorydata, null, 2));
+  // 🔥 Ensure airesponse is a boolean (in case it arrives as string "true"/"false")
+  const aiResponseBool = airesponse === true || airesponse === 'true';
+
+  console.log('[update-api] airesponse received:', airesponse, '→ coerced to:', aiResponseBool);
 
   try {
     const project = await Project.findOne({ id: project_id });
@@ -65,10 +75,9 @@ async function update_api(req, res) {
       : 0;
     const newVersion = `v${lastNum + 1}`;
 
-    // Destructure all fields, including new ones
     const {
-      protocol = 'https',
-      method = 'GET',
+      protocol,
+      method,
       pathParams = [],
       queryParams = [],
       requestBody = null,
@@ -81,11 +90,10 @@ async function update_api(req, res) {
       responseHeaders = [],
       cookies = [],
       statusCode = 200,
-      expectedToken = '',      // ✨ new
-      expectedApiKey = '',     // ✨ new
+      expectedToken = '',
+      expectedApiKey = '',
     } = apihistorydata;
 
-    // 🔍 LOG the destructured fields (especially expectedToken, expectedApiKey, cookies)
     console.log('[update-api] Destructured fields:', {
       protocol, method, pathParams, queryParams,
       isAuthEnabled, authScheme, latency, rateLimit, statusCode,
@@ -94,7 +102,7 @@ async function update_api(req, res) {
     });
 
     const mongoId = project._id.toString();
-    const host = process.env.HOST;
+    const host = process.env.HOST || 'localhost:4000';
     const actualFullUrl = buildActualFullUrl(protocol, host, mongoId, newVersion, urlpath, pathParams, queryParams);
 
     const newVersionObj = {
@@ -107,7 +115,7 @@ async function update_api(req, res) {
       responseBody,
       version: newVersion,
       actualFullUrl,
-      airesponse: airesponse || false,
+      airesponse: aiResponseBool,   // ✅ store the coerced boolean
       isAuthEnabled,
       authScheme,
       latency,
@@ -122,7 +130,6 @@ async function update_api(req, res) {
       updatedAt: new Date(),
     };
 
-    // 🔍 LOG the newVersionObj that will be stored and synced
     console.log('[update-api] newVersionObj (saved & synced):', JSON.stringify(newVersionObj, null, 2));
 
     endpoint.versions.push(newVersionObj);
@@ -142,7 +149,7 @@ async function update_api(req, res) {
 
     // ─── Log + emit ─────────────────────────────────────────────────────────
     const newLog = await SystemEventLog.create({
-      projectId: project.id,          // ✅ use the custom string ID (e.g., "adiisme_haj")
+      projectId: project.id,
       method: method.toUpperCase(),
       url: urlpath,
       action: 'updated',
