@@ -1,6 +1,7 @@
 const Project = require('../models/Project');
 const { redisClient } = require('../config/redis');
 const mongoose = require('mongoose');
+const projectQueue = require('../queues/projectQueue');
 
 async function updateProjectStatus(req, res) {
   const { projectId } = req.params;
@@ -28,24 +29,28 @@ async function updateProjectStatus(req, res) {
       return res.status(404).json({ error: "Project not found" });
     }
 
-    // Permission check
     if (project.username !== username && role !== 'admin') {
       return res.status(403).json({ error: "Only project creators or admins can change status" });
     }
 
-    // Update status
     project.isActive = isActive;
     await project.save();
 
-    // Invalidate Redis caches
+    // Push toggle job (does not affect subscription)
+    await projectQueue.add('toggle', {
+      action: 'toggle',
+      projectId: project.id,
+      isActive: isActive,
+    }, { jobId: `toggle:${project.id}:${isActive}` });
+    console.log(`[ProjectQueue] Toggle job enqueued for ${project.id} (isActive: ${isActive})`);
+
     await redisClient.del(`user:projects:${project.username}`);
     for (const member of project.members) {
       await redisClient.del(`user:projects:${member}`);
     }
 
-    // Emit socket event to all members in the project room
     if (req.io) {
-      const roomName = project.id; // custom string id (e.g., "adiisme_myproject")
+      const roomName = project.id;
       req.io.to(roomName).emit('project_status_changed', {
         projectId: project.id,
         isActive: project.isActive
