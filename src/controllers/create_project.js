@@ -1,9 +1,5 @@
-
-
-
 const Project = require('../models/Project');
 const ProjectApiHistory = require('../models/ProjectApiHistory');
-const User = require('../models/User');          // 👈 import User model
 const { redisClient } = require('../config/redis');
 const projectQueue = require('../queues/projectQueue');
 
@@ -12,7 +8,6 @@ const MAX_ATTEMPTS = parseInt(process.env.INVITATION_MAX_ATTEMPTS, 10);
 const INVITATION_RESERVE_TTL = parseInt(process.env.INVITATION_RESERVE_TTL, 10);
 const CHARSET = process.env.INVITATION_CHARSET;
 
-
 const generateUniqueInvitationCode = async () => {
   let attempts = 0;
   while (attempts < MAX_ATTEMPTS) {
@@ -20,11 +15,9 @@ const generateUniqueInvitationCode = async () => {
     for (let i = 0; i < CODE_LENGTH; i++) {
       code += CHARSET.charAt(Math.floor(Math.random() * CHARSET.length));
     }
-    
     const redisKey = `invitation:${code}`;
     if (!redisClient.isOpen) await redisClient.connect();
     const existsInRedis = await redisClient.exists(redisKey);
-    
     if (!existsInRedis) {
       const existsInDB = await Project.findOne({ invitationCode: code });
       if (!existsInDB) {
@@ -36,7 +29,6 @@ const generateUniqueInvitationCode = async () => {
   }
   return `INV-${Date.now()}`;
 };
-
 
 async function create_project(req, res) {
   const { projectname } = req.body;
@@ -59,11 +51,6 @@ async function create_project(req, res) {
     if (duplicateCheck) {
       return res.status(400).json({ error: "You already have a workspace with this name" });
     }
-
-    // ─── 🔍 FETCH USER'S SUBSCRIPTION STATUS ────────────────────────────
-    const user = await User.findOne({ username }).select('subscribe');
-    const isSubscribed = user ? user.subscribe === true : false;
-    console.log(`[create_project] User ${username} subscription: ${isSubscribed}`);
 
     const invitationCode = await generateUniqueInvitationCode();
 
@@ -98,20 +85,19 @@ async function create_project(req, res) {
     });
     await projectHistory.save();
 
-    // ─── 🔁 PUSH JOB WITH REAL SUBSCRIPTION STATUS ──────────────────────
+    // Push job without subscription – orchestrator will handle it
     await projectQueue.add('create', {
       action: 'create',
       projectId: generatedCustomId,
-      subscribed: isSubscribed,   // ✅ now uses the actual value from DB
-    });
-    console.log(`[ProjectQueue] Enqueued create job for ${generatedCustomId} (subscribed: ${isSubscribed})`);
+    }, { jobId: `create_${generatedCustomId}` });
+
+    console.log(`[ProjectQueue] Enqueued create job for ${generatedCustomId}`);
 
     return res.status(201).json({
       success: true,
       invitationCode: invitationCode,
       project: savedProject
     });
-
   } catch (error) {
     if (error.code === 11000) {
       return res.status(409).json({ error: "Conflict detected. Please try again." });

@@ -36,13 +36,14 @@ async function updateProjectStatus(req, res) {
     project.isActive = isActive;
     await project.save();
 
-    // Push toggle job (does not affect subscription)
-    await projectQueue.add('toggle', {
-      action: 'toggle',
+    // Push update job – NO subscription field
+    await projectQueue.add('update', {
+      action: 'update',
       projectId: project.id,
       isActive: isActive,
-    }, { jobId: `toggle:${project.id}:${isActive}` });
-    console.log(`[ProjectQueue] Toggle job enqueued for ${project.id} (isActive: ${isActive})`);
+    }, { jobId: `update_${project.id}_${isActive}` });
+
+    console.log(`[ProjectQueue] Update job enqueued for ${project.id} (isActive: ${isActive})`);
 
     await redisClient.del(`user:projects:${project.username}`);
     for (const member of project.members) {
@@ -50,12 +51,10 @@ async function updateProjectStatus(req, res) {
     }
 
     if (req.io) {
-      const roomName = project.id;
-      req.io.to(roomName).emit('project_status_changed', {
+      req.io.to(project.id).emit('project_status_changed', {
         projectId: project.id,
         isActive: project.isActive
       });
-      console.log(`[Socket] Project status changed emitted to room: ${roomName}`);
     }
 
     return res.json({ success: true, project });

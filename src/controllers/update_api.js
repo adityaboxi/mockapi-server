@@ -4,6 +4,8 @@ const SystemEventLog = require('../models/SystemEventLog');
 const { storeMockDefinition } = require('../utils/redisMock');
 const { addMockSyncJob } = require('../queues/mockSyncQueue');
 
+const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -34,16 +36,11 @@ async function update_api(req, res) {
   const { project_id, urlpath, apihistorydata, airesponse } = req.body;
   const username = req.user?.username;
 
-  console.log('[update-api] Request body:', JSON.stringify(req.body, null, 2));
-
   if (!project_id || !urlpath || !apihistorydata) {
     return res.status(400).json({ error: 'Missing required fields: project_id, urlpath, apihistorydata' });
   }
 
-  // 🔥 Ensure airesponse is a boolean (in case it arrives as string "true"/"false")
   const aiResponseBool = airesponse === true || airesponse === 'true';
-
-  console.log('[update-api] airesponse received:', airesponse, '→ coerced to:', aiResponseBool);
 
   try {
     const project = await Project.findOne({ id: project_id });
@@ -82,27 +79,37 @@ async function update_api(req, res) {
       queryParams = [],
       requestBody = null,
       responseBody = null,
-      isAuthEnabled = false,
-      authScheme = 'BearerAuth',
-      latency = 0,
-      rateLimit = 0,
+      isAuthEnabled,
+      authScheme,
+      latency,
+      rateLimit,
       headers = [],
       responseHeaders = [],
       cookies = [],
-      statusCode = 200,
+      statusCode,
       expectedToken = '',
       expectedApiKey = '',
     } = apihistorydata;
 
-    console.log('[update-api] Destructured fields:', {
-      protocol, method, pathParams, queryParams,
-      isAuthEnabled, authScheme, latency, rateLimit, statusCode,
-      headers, responseHeaders, cookies,
-      expectedToken, expectedApiKey
-    });
+    // --- Validate required fields ---
+    if (!protocol) return res.status(400).json({ error: 'protocol is required' });
+    if (!method) return res.status(400).json({ error: 'method is required' });
+    if (!ALLOWED_METHODS.includes(method.toUpperCase())) {
+      return res.status(400).json({ error: `Invalid method. Allowed: ${ALLOWED_METHODS.join(', ')}` });
+    }
+    if (isAuthEnabled === undefined) return res.status(400).json({ error: 'isAuthEnabled is required' });
+    if (!authScheme) return res.status(400).json({ error: 'authScheme is required' });
+    if (latency === undefined) return res.status(400).json({ error: 'latency is required' });
+    if (rateLimit === undefined) return res.status(400).json({ error: 'rateLimit is required' });
+    if (statusCode === undefined) return res.status(400).json({ error: 'statusCode is required' });
+    if (typeof statusCode !== 'number') {
+      return res.status(400).json({ error: 'statusCode must be a number' });
+    }
+
+    const host = process.env.HOST;
+    if (!host) return res.status(500).json({ error: 'HOST environment variable is not set' });
 
     const mongoId = project._id.toString();
-    const host = process.env.HOST || 'localhost:4000';
     const actualFullUrl = buildActualFullUrl(protocol, host, mongoId, newVersion, urlpath, pathParams, queryParams);
 
     const newVersionObj = {
@@ -115,7 +122,7 @@ async function update_api(req, res) {
       responseBody,
       version: newVersion,
       actualFullUrl,
-      airesponse: aiResponseBool,   // ✅ store the coerced boolean
+      airesponse: aiResponseBool,
       isAuthEnabled,
       authScheme,
       latency,
@@ -130,13 +137,11 @@ async function update_api(req, res) {
       updatedAt: new Date(),
     };
 
-    console.log('[update-api] newVersionObj (saved & synced):', JSON.stringify(newVersionObj, null, 2));
-
     endpoint.versions.push(newVersionObj);
     endpoint.updatedAt = new Date();
     await projectHistory.save();
 
-    // ─── Sync mock server ───────────────────────────────────────────────────
+    // ─── Sync to mock server (NO subscription) ────────────────────────────
     const definitionData = {
       projectId: mongoId,
       version: newVersion,
@@ -144,10 +149,11 @@ async function update_api(req, res) {
       urlpath,
       apihistorydata: newVersionObj,
     };
+
     await storeMockDefinition(mongoId, newVersion, method, urlpath, definitionData);
     await addMockSyncJob('set', definitionData);
 
-    // ─── Log + emit ─────────────────────────────────────────────────────────
+    // ─── Log the event ─────────────────────────────────────────────────────
     const newLog = await SystemEventLog.create({
       projectId: project.id,
       method: method.toUpperCase(),
