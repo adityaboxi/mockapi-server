@@ -1,12 +1,14 @@
 const { Queue, Worker } = require('bullmq');
 const { sendOTPEmail } = require('../services/emailService');
 
-// BullMQ connection options – must include TLS for Upstash
+// Use local Redis – no TLS, no Upstash-specific options
+const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+
 const redisConnectionOptions = {
   connection: {
-    url: process.env.REDIS_URL,
+    url: REDIS_URL,
     maxRetriesPerRequest: null,
-    tls: {}   // 👈 Force TLS – required for Upstash
+    enableReadyCheck: false,
   }
 };
 

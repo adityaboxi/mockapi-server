@@ -1,20 +1,29 @@
 const { Queue } = require('bullmq');
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
-
 const mockSyncQueue = new Queue('mockSyncQueue', {
   connection: {
-    url: REDIS_URL,
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
-    // ❌ Remove `tls`
-  },
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: { type: 'exponential', delay: 1000 },
-    removeOnComplete: true,
-    removeOnFail: { age: 86400, count: 1000 },
+    host: 'localhost',
+    port: 6379,
   },
 });
 
-module.exports = mockSyncQueue;
+async function addMockSyncJob(action, data) {
+  if (!['set', 'delete'].includes(action)) {
+    throw new Error(`[Queue] Invalid action: ${action}`);
+  }
+  try {
+    const job = await mockSyncQueue.add('sync', { action, ...data }, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 1000 },
+      removeOnComplete: 100,
+      removeOnFail: 50,
+    });
+    console.log(`[Queue] Job ${job.id} queued — action: ${action}, projectId: ${data.projectId}, version: ${data.version}`);
+    return job;
+  } catch (err) {
+    console.error('[Queue] Failed to add job:', err.message);
+    throw err;
+  }
+}
+
+module.exports = { mockSyncQueue, addMockSyncJob };
