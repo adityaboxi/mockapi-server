@@ -13,7 +13,6 @@ async function delete_api_version(req, res) {
   if (!username || role === 'guest') {
     return res.status(401).json({ error: 'Authentication required' });
   }
-
   if (!versionId || !projectId) {
     return res.status(400).json({ error: 'Missing versionId or projectId' });
   }
@@ -44,7 +43,6 @@ async function delete_api_version(req, res) {
         const matchesId = v._id?.toString() === versionId;
         const matchesVersion = v.version === versionId;
         const matchesComposite = `${endpoint.baseUrlPath}_${v.version}` === versionId;
-
         if (matchesId || matchesVersion || matchesComposite) {
           targetEndpointIndex = i;
           targetVersionIndex = j;
@@ -60,25 +58,22 @@ async function delete_api_version(req, res) {
       return res.status(404).json({ error: 'Version not found' });
     }
 
-    // Remove the version (and endpoint if empty)
     projectHistory.endpoints[targetEndpointIndex].versions.splice(targetVersionIndex, 1);
     if (projectHistory.endpoints[targetEndpointIndex].versions.length === 0) {
       projectHistory.endpoints.splice(targetEndpointIndex, 1);
     }
     await projectHistory.save();
 
-    const mongoId = project._id.toString();
+    const customId = project.id; // ✅ custom id everywhere
 
-    // Sync deletion to mock server
-    await deleteMockDefinition(mongoId, deletedVersion.version, method, endpointBasePath);
+    await deleteMockDefinition(customId, deletedVersion.version, method, endpointBasePath);
     await addMockSyncJob('delete', {
-      projectId: mongoId,
+      projectId: customId,
       version: deletedVersion.version,
       method,
       urlpath: endpointBasePath,
     });
 
-    // Log the event
     const newLog = await SystemEventLog.create({
       projectId: project.id,
       method,

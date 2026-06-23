@@ -11,10 +11,6 @@ function escapeRegExp(str) {
 }
 
 function buildActualFullUrl(protocol, host, projectId, version, urlPath, pathParams, queryParams) {
-  if (!host) {
-    console.warn('[buildActualFullUrl] Host is missing – using localhost fallback');
-    host = 'localhost:4000';
-  }
   let resolvedPath = urlPath || '';
   pathParams.forEach(({ key, value }) => {
     const escapedKey = escapeRegExp(key);
@@ -91,12 +87,20 @@ async function update_api(req, res) {
       expectedApiKey = '',
     } = apihistorydata;
 
-    // --- Validate required fields ---
     if (!protocol) return res.status(400).json({ error: 'protocol is required' });
     if (!method) return res.status(400).json({ error: 'method is required' });
     if (!ALLOWED_METHODS.includes(method.toUpperCase())) {
       return res.status(400).json({ error: `Invalid method. Allowed: ${ALLOWED_METHODS.join(', ')}` });
     }
+
+    const SUPPORTED_PROTOCOLS = process.env.SUPPORTED_PROTOCOLS
+      ? process.env.SUPPORTED_PROTOCOLS.split(',').map(p => p.trim().toLowerCase())
+      : null;
+    if (!SUPPORTED_PROTOCOLS) return res.status(500).json({ error: 'SUPPORTED_PROTOCOLS env variable is not set' });
+    if (!SUPPORTED_PROTOCOLS.includes(protocol.toLowerCase())) {
+      return res.status(400).json({ error: `Protocol '${protocol}' not supported. Allowed: ${SUPPORTED_PROTOCOLS.join(', ')}` });
+    }
+
     if (isAuthEnabled === undefined) return res.status(400).json({ error: 'isAuthEnabled is required' });
     if (!authScheme) return res.status(400).json({ error: 'authScheme is required' });
     if (latency === undefined) return res.status(400).json({ error: 'latency is required' });
@@ -109,8 +113,9 @@ async function update_api(req, res) {
     const host = process.env.HOST;
     if (!host) return res.status(500).json({ error: 'HOST environment variable is not set' });
 
-    const mongoId = project._id.toString();
-    const actualFullUrl = buildActualFullUrl(protocol, host, mongoId, newVersion, urlpath, pathParams, queryParams);
+    const customId = project.id; // ✅ custom id used everywhere
+
+    const actualFullUrl = buildActualFullUrl(protocol, host, customId, newVersion, urlpath, pathParams, queryParams);
 
     const newVersionObj = {
       protocol,
@@ -141,21 +146,20 @@ async function update_api(req, res) {
     endpoint.updatedAt = new Date();
     await projectHistory.save();
 
-    // ─── Sync to mock server (NO subscription) ────────────────────────────
+    // ✅ use customId everywhere
     const definitionData = {
-      projectId: mongoId,
+      projectId: customId,
       version: newVersion,
       method,
       urlpath,
       apihistorydata: newVersionObj,
     };
 
-    await storeMockDefinition(mongoId, newVersion, method, urlpath, definitionData);
+    await storeMockDefinition(customId, newVersion, method, urlpath, definitionData);
     await addMockSyncJob('set', definitionData);
 
-    // ─── Log the event ─────────────────────────────────────────────────────
     const newLog = await SystemEventLog.create({
-      projectId: project.id,
+      projectId: project_id,
       method: method.toUpperCase(),
       url: urlpath,
       action: 'updated',

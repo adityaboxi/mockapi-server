@@ -38,7 +38,6 @@ async function create_project(req, res) {
   if (role === 'guest') {
     return res.status(403).json({ error: "Guest users cannot create projects" });
   }
-
   if (!username || !projectname || !projectname.trim()) {
     return res.status(400).json({ error: "Valid username and project name are required" });
   }
@@ -78,14 +77,13 @@ async function create_project(req, res) {
     const savedProject = await Project.create(newProject);
 
     const projectHistory = new ProjectApiHistory({
-      projectID: savedProject._id.toString(),
+      projectID: generatedCustomId, // ✅ custom id
       projectCode: invitationCode,
       accessByUsernames: [username],
       endpoints: []
     });
     await projectHistory.save();
 
-    // Push job without subscription – orchestrator will handle it
     await projectQueue.add('create', {
       action: 'create',
       projectId: generatedCustomId,
@@ -98,6 +96,7 @@ async function create_project(req, res) {
       invitationCode: invitationCode,
       project: savedProject
     });
+
   } catch (error) {
     if (error.code === 11000) {
       return res.status(409).json({ error: "Conflict detected. Please try again." });

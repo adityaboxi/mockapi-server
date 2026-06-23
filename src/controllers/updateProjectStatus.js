@@ -41,7 +41,7 @@ async function updateProjectStatus(req, res) {
       action: 'update',
       projectId: project.id,
       isActive: isActive,
-    }, { jobId: `update_${project.id}_${isActive}` });
+    }, { jobId: `update_${project.id}_${isActive}_${Date.now()}` });
 
     console.log(`[ProjectQueue] Update job enqueued for ${project.id} (isActive: ${isActive})`);
 
@@ -65,3 +65,6 @@ async function updateProjectStatus(req, res) {
 }
 
 module.exports = updateProjectStatus;
+
+
+

@@ -1,7 +1,7 @@
 const redis = require('redis');
 
-// Use local Redis by default (no TLS)
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+const REDIS_URL = process.env.REDIS_URL;
+if (!REDIS_URL) throw new Error('REDIS_URL env is not set');
 
 const redisClient = redis.createClient({
   url: REDIS_URL,
@@ -14,21 +14,10 @@ const redisClient = redis.createClient({
   }
 });
 
-redisClient.on('connect', () => {
-  console.log('✅ Redis connected successfully');
-});
-
-redisClient.on('error', (err) => {
-  console.error('❌ Redis error:', err);
-});
-
-redisClient.on('ready', () => {
-  console.log('✅ Redis client ready');
-});
-
-redisClient.on('end', () => {
-  console.log('⚠️ Redis connection closed');
-});
+redisClient.on('connect', () => console.log('✅ Redis connected successfully'));
+redisClient.on('error', (err) => console.error('❌ Redis error:', err));
+redisClient.on('ready', () => console.log('✅ Redis client ready'));
+redisClient.on('end', () => console.log('⚠️ Redis connection closed'));
 
 const connectRedis = async () => {
   try {
@@ -40,12 +29,10 @@ const connectRedis = async () => {
   }
 };
 
-// TTL values (seconds)
 const INVITATION_RESERVE_TTL = parseInt(process.env.INVITATION_RESERVE_TTL, 10) || 30;
 const INVITATION_STORE_TTL = parseInt(process.env.INVITATION_STORE_TTL, 10) || 604800;
 const PROJECT_CACHE_TTL = parseInt(process.env.PROJECT_CACHE_TTL, 10) || 1800;
 
-// Helper functions (unchanged)
 const getInvitationRedisKey = (invitationCode) => `invitation:${invitationCode}`;
 
 const isInvitationCodeInRedis = async (invitationCode) => {
@@ -90,11 +77,7 @@ const getCachedProject = async (username, projectname) => {
   const key = `project:${username}:${projectname}`;
   const data = await redisClient.get(key);
   if (data) {
-    try {
-      return JSON.parse(data);
-    } catch {
-      return data;
-    }
+    try { return JSON.parse(data); } catch { return data; }
   }
   return null;
 };

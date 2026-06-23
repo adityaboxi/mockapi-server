@@ -4,7 +4,6 @@ const SystemEventLog = require('../models/SystemEventLog');
 const { storeMockDefinition } = require('../utils/redisMock');
 const { addMockSyncJob } = require('../queues/mockSyncQueue');
 
-// Allowed HTTP methods
 const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
 function buildActualFullUrl(protocol, host, projectId, version, urlPath, pathParams, queryParams) {
@@ -32,7 +31,6 @@ async function add_api(req, res) {
   const { project_id, urlpath, apihistorydata, airesponse } = req.body;
   const username = req.user?.username;
 
-  // --- Required fields ---
   if (!project_id || !urlpath || !apihistorydata) {
     return res.status(400).json({ error: 'Missing required fields: project_id, urlpath, apihistorydata' });
   }
@@ -51,7 +49,7 @@ async function add_api(req, res) {
     let projectHistory = await ProjectApiHistory.findOne({ projectCode: project.invitationCode });
     if (!projectHistory) {
       projectHistory = new ProjectApiHistory({
-        projectID: project._id.toString(),
+        projectID: project.id, // ✅ store custom id
         projectCode: project.invitationCode,
         accessByUsernames: [username],
         endpoints: []
@@ -64,7 +62,6 @@ async function add_api(req, res) {
       return res.status(409).json({ error: 'URL path already exists. Use /update-api to add a new version.' });
     }
 
-    // --- Destructure with defaults for arrays ---
     const {
       protocol,
       method,
@@ -84,12 +81,20 @@ async function add_api(req, res) {
       expectedApiKey = '',
     } = apihistorydata;
 
-    // --- Validate required fields ---
     if (!protocol) return res.status(400).json({ error: 'protocol is required' });
     if (!method) return res.status(400).json({ error: 'method is required' });
     if (!ALLOWED_METHODS.includes(method.toUpperCase())) {
       return res.status(400).json({ error: `Invalid method. Allowed: ${ALLOWED_METHODS.join(', ')}` });
     }
+
+    const SUPPORTED_PROTOCOLS = process.env.SUPPORTED_PROTOCOLS
+      ? process.env.SUPPORTED_PROTOCOLS.split(',').map(p => p.trim().toLowerCase())
+      : null;
+    if (!SUPPORTED_PROTOCOLS) return res.status(500).json({ error: 'SUPPORTED_PROTOCOLS env variable is not set' });
+    if (!SUPPORTED_PROTOCOLS.includes(protocol.toLowerCase())) {
+      return res.status(400).json({ error: `Protocol '${protocol}' not supported. Allowed: ${SUPPORTED_PROTOCOLS.join(', ')}` });
+    }
+
     if (isAuthEnabled === undefined) return res.status(400).json({ error: 'isAuthEnabled is required' });
     if (!authScheme) return res.status(400).json({ error: 'authScheme is required' });
     if (latency === undefined) return res.status(400).json({ error: 'latency is required' });
@@ -103,8 +108,10 @@ async function add_api(req, res) {
     if (!host) return res.status(500).json({ error: 'HOST environment variable is not set' });
 
     const version = 'v1';
+    const customId = project.id; // ✅ custom id used everywhere
+
     const actualFullUrl = buildActualFullUrl(
-      protocol, host, project._id.toString(), version, urlpath, pathParams, queryParams
+      protocol, host, customId, version, urlpath, pathParams, queryParams
     );
 
     const newVersionObj = {
@@ -143,25 +150,24 @@ async function add_api(req, res) {
     projectHistory.endpoints.push(newEndpoint);
     await projectHistory.save();
 
-    // ─── Sync to mock server (NO subscription field) ─────────────────────
+    // ✅ use customId everywhere
     const definitionData = {
-      projectId: project._id.toString(),
+      projectId: customId,
       version,
       method,
       urlpath,
       apihistorydata: newVersionObj,
     };
 
-    await storeMockDefinition(project._id.toString(), version, method, urlpath, definitionData);
+    await storeMockDefinition(customId, version, method, urlpath, definitionData);
     await addMockSyncJob('set', definitionData);
 
-    // ─── Log the event ─────────────────────────────────────────────────────
     const newLog = await SystemEventLog.create({
       projectId: project_id,
       method: method.toUpperCase(),
       url: urlpath,
       action: 'created',
-      version: version,
+      version,
       username,
       statusCode: 201,
       createdAt: new Date()

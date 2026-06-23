@@ -2,8 +2,9 @@ const { Queue } = require('bullmq');
 
 const projectQueue = new Queue('projectQueue', {
   connection: {
-    host: 'localhost',
-    port: 6379,
+    url: process.env.REDIS_URL,
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
   },
 });
 
