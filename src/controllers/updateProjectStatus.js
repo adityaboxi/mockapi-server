@@ -1,6 +1,5 @@
 const Project = require('../models/Project');
 const { redisClient } = require('../config/redis');
-const mongoose = require('mongoose');
 const projectQueue = require('../queues/projectQueue');
 
 async function updateProjectStatus(req, res) {
@@ -19,12 +18,7 @@ async function updateProjectStatus(req, res) {
   try {
     if (!redisClient.isOpen) await redisClient.connect();
 
-    let queryFilter = { id: projectId };
-    if (mongoose.Types.ObjectId.isValid(projectId)) {
-      queryFilter = { $or: [{ id: projectId }, { _id: projectId }] };
-    }
-
-    const project = await Project.findOne(queryFilter);
+    const project = await Project.findOne({ id: projectId }); 
     if (!project) {
       return res.status(404).json({ error: "Project not found" });
     }
@@ -36,7 +30,6 @@ async function updateProjectStatus(req, res) {
     project.isActive = isActive;
     await project.save();
 
-    // Push update job – NO subscription field
     await projectQueue.add('update', {
       action: 'update',
       projectId: project.id,
@@ -65,6 +58,3 @@ async function updateProjectStatus(req, res) {
 }
 
 module.exports = updateProjectStatus;
-
-
-
