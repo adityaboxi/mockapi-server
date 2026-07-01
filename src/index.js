@@ -8,7 +8,7 @@ const { Server } = require('socket.io');
 // Configs
 const connectDB = require('./config/db');
 const { connectRedis } = require('./config/redis');
-const { authenticateToken } = require('./middleware/auth');
+const { authenticateToken,requireAuth } = require('./middleware/auth');
 
 // Models
 const SystemEventLog = require('./models/SystemEventLog');
@@ -91,6 +91,9 @@ const startServer = async () => {
   const logs = require('./controllers/logs');
   const unsubscribe = require('./controllers/unsubscribe');
 const { ask_ai } = require('./controllers/ask_ai');
+const delete_project = require('./controllers/delete_project');
+
+
   // ============ ROUTES ============
   app.post('/api/subscribe', authenticateToken, subscribe);
   app.post('/api/unsubscribe', authenticateToken, unsubscribe);
@@ -123,6 +126,8 @@ const { ask_ai } = require('./controllers/ask_ai');
   app.post('/api/ask-ai', authenticateToken, ask_ai);
   app.post('/api/reverse-ai', authenticateToken, reverse_ai);
   app.post('/api/logs', authenticateToken, logs);
+app.delete('/api/deleteproject/:projectId', authenticateToken, delete_project);
+
 
 app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' });
