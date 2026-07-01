@@ -1,6 +1,6 @@
 # -------------------- Dependencies (prevent local OS‑specific modules) --------------------
 node_modules/
-package-lock.json    # Optional – but if you COPY package.json + package-lock.json, you still need it. If excluded, npm ci in Docker will use its own copy.
+package-lock.json   
 yarn.lock
 .pnpm-store/
 
