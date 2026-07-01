@@ -10,6 +10,9 @@ function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+
+
+
 function buildActualFullUrl(protocol, host, projectId, version, urlPath, pathParams, queryParams) {
   let resolvedPath = urlPath || '';
   pathParams.forEach(({ key, value }) => {
@@ -17,7 +20,7 @@ function buildActualFullUrl(protocol, host, projectId, version, urlPath, pathPar
     resolvedPath = resolvedPath.replace(new RegExp(`:${escapedKey}`, 'g'), value || `{${key}}`);
   });
   if (resolvedPath.startsWith('/')) resolvedPath = resolvedPath.slice(1);
-  let fullUrl = `${protocol}://${host}/${projectId}/${version}/${resolvedPath}`;
+  let fullUrl = `${protocol}://${host}/p/${projectId}/${version}/${resolvedPath}`;
   if (queryParams?.length) {
     const qs = queryParams
       .filter(q => q.key && q.value)
@@ -27,6 +30,8 @@ function buildActualFullUrl(protocol, host, projectId, version, urlPath, pathPar
   }
   return fullUrl;
 }
+
+
 
 async function update_api(req, res) {
   const { project_id, urlpath, apihistorydata, airesponse } = req.body;

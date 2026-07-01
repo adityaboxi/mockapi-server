@@ -5,7 +5,6 @@ const { storeMockDefinition } = require('../utils/redisMock');
 const { addMockSyncJob } = require('../queues/mockSyncQueue');
 
 const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
-
 function buildActualFullUrl(protocol, host, projectId, version, urlPath, pathParams, queryParams) {
   const resolvedPath = (urlPath || '')
     .split('/')
@@ -16,7 +15,7 @@ function buildActualFullUrl(protocol, host, projectId, version, urlPath, pathPar
     })
     .join('/');
 
-  let fullUrl = `${protocol}://${host}/${projectId}/${version}/${resolvedPath}`;
+  let fullUrl = `${protocol}://${host}/p/${projectId}/${version}/${resolvedPath}`;
   if (queryParams?.length) {
     const qs = queryParams
       .filter(q => q.key && q.value)
